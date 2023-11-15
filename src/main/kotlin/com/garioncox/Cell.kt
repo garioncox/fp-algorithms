@@ -1,3 +1,3 @@
 package com.garioncox
 
-class Cell(var row: Int, var col: Int, var domain: Collection<Int?>)
+class Cell (val row: Int, val col: Int, var domain: Set<Int>, var isSolved: Boolean = false)
