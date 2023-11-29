@@ -9,5 +9,8 @@
         <module name="wave-function-collapse" />
       </profile>
     </annotationProcessing>
+    <bytecodeTargetLevel>
+      <module name="take2wfc" target="1.7" />
+    </bytecodeTargetLevel>
   </component>
 </project>
