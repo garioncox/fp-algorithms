@@ -48,6 +48,7 @@ class WFC {
                     if (current.isSolved) { continue }
 
                     val neighbors = board.map { it[col] } + board[row] - current
+//                    val neighbors = getNeighbors(row, col, board)
                     for (n in neighbors) {
                         if (!n.isSolved) { continue }
 
@@ -68,6 +69,26 @@ class WFC {
             }
 
             return board
+        }
+
+        fun getNeighbors(row: Int, col: Int, board: Array<Array<Cell>>): Collection<Cell> {
+            val currentCell = board[row][col]
+            val rowCells = board[row].toSet()
+            val colCells = board.map { it[col] }.toSet()
+            val boxCells = getBoxCells(row, col, board)
+
+            return colCells + rowCells + boxCells - currentCell
+        }
+
+        fun getBoxCells(row: Int, col: Int, board: Array<Array<Cell>>): Set<Cell> {
+            val box = mutableSetOf<Cell>()
+            for (i in 0..< 3) {
+                for (j in 0..< 3) {
+                    box.add(board[(row/3)*3 + i][(col/3)*3 + j])
+                }
+            }
+
+            return box
         }
 
         fun guess(board: Array<Array<Cell>>): Array<Array<Cell>> {
