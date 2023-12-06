@@ -148,6 +148,33 @@ class Tests {
     }
 
     @Test
+    fun `Get Neighbors With Least Entropy`() {
+        wfc = WFC(SudokuConstraints())
+
+        val input = arrayOf(
+            arrayOf(4, 8, 3, 9, 2, 1, 6, 5, 7),
+            arrayOf(9, 6, 7, 3, 4, 5, 8, 2, 1),
+            arrayOf(2, 5, 0, 8, 7, 6, 4, 9, 3),
+            arrayOf(5, 4, 8, 1, 3, 2, 9, 7, 6),
+            arrayOf(7, 2, 9, 5, 6, 4, 1, 3, 8),
+            arrayOf(1, 3, 6, 7, 9, 8, 0, 4, 5),
+            arrayOf(3, 7, 2, 6, 8, 9, 5, 1, 4),
+            arrayOf(8, 1, 4, 0, 5, 3, 7, 6, 9),
+            arrayOf(6, 9, 5, 4, 1, 7, 3, 8, 2)
+        )
+
+        val cells = ToSudokuCells(input)
+
+        val cellsWithLeastEntropy = wfc.getCellsWithLeastEntropy(cells)
+
+        val expected = listOf(cells[2][2], cells[5][6], cells[7][3])
+
+        for (i in 0..< cellsWithLeastEntropy!!.size) {
+            assertEquals(expected[i], cellsWithLeastEntropy[i])
+        }
+    }
+
+    @Test
     fun `Sudoku Board Solves`() {
         wfc = WFC(SudokuConstraints())
 
@@ -179,7 +206,6 @@ class Tests {
 
         for (i in 0..2) {
             wfc.guess(cells)
-            wfc.propagate(cells)
         }
 
         cells.isEqualTo(expected)

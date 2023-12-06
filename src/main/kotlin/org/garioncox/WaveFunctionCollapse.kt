@@ -48,7 +48,6 @@ class WFC(val constraints: IConstraints) {
                     continue
                 }
 
-//                val neighbors = board.map { it[col] } + board[row] - current
                 val neighbors = constraints.getNeighborsOf(row, col, board)
                 for (n in neighbors) {
                     if (!n.isSolved) {
@@ -75,46 +74,48 @@ class WFC(val constraints: IConstraints) {
     }
 
     fun guess(board: Array<Array<Cell>>): Array<Array<Cell>> {
+        var boardCopy = board.copyOf()
 
-        val randomCell: Cell
-        try {
-            randomCell = getRandomCellWithLeastEntropy(board)
-        } catch (e: IllegalStateException) {
-            return board
+        val cells = getCellsWithLeastEntropy(boardCopy)
+        if (cells.isNullOrEmpty()) {
+            return boardCopy
         }
 
-        var toReturn: Array<Array<Cell>>
+        val randomCell = cells.random()
+        var originalDomain = randomCell.domain.copyOf()
+
         while (true) {
-            val randomCellDomain = randomCell.domain.copyOf()
+            // Make a guess
             val validRandomCellDomain = randomCell.domain.indices.filter { randomCell.domain[it] }
-            val updatedDomain = BooleanArray(board.size) { false }
+            val updatedDomain = BooleanArray(boardCopy.size) { false }
             val choice = validRandomCellDomain.random()
             updatedDomain[choice] = true
 
+            // Update cell based on guess
             randomCell.domain = updatedDomain.toTypedArray()
             randomCell.isSolved = true
 
+            // Try to propagate the guess
             try {
-                toReturn = propagate(board)
-            } catch (e: IllegalStateException) {
-                // If failed to propagate, remove the choice from the options and try again
-                randomCell.domain = randomCellDomain
-                randomCell.domain[choice] = false
-                randomCell.isSolved = false
+                propagate(boardCopy)
 
-                // If there is only one value in the domain, that is the solution
-                if (randomCell.domain.indices.count { randomCell.domain[it] } == 1) {
-                    toReturn = board
-                    break
-                }
+                // Completed successfully
+                break
+            }
+            catch (e: IllegalStateException) {
+                // Remove guess from the original domain
+                originalDomain[choice] = false
 
+                // Undo changes to the board and cell
+                boardCopy = board
+                randomCell.domain = originalDomain
+
+                // Try again
                 continue
             }
-
-            break
         }
 
-        return toReturn
+        return boardCopy
     }
 
     fun isSolved(board: Array<Array<Cell>>): Boolean {
@@ -127,10 +128,10 @@ class WFC(val constraints: IConstraints) {
         return true
     }
 
-    private fun getRandomCellWithLeastEntropy(board: Array<Array<Cell>>): Cell {
+    fun getCellsWithLeastEntropy(board: Array<Array<Cell>>): List<Cell>? {
         val unsolvedCells = board.flatten().filter { cell -> !cell.isSolved }
         if (unsolvedCells.isEmpty()) {
-            throw IllegalStateException()
+            return null
         }
 
         val leastEntropy = unsolvedCells.minOf { cell -> cell.domain.count { it } }
@@ -138,8 +139,7 @@ class WFC(val constraints: IConstraints) {
             throw IllegalStateException()
         } // Should never be 1. This means all cells are solved
 
-        val cellsWithLeastEntropy = unsolvedCells.filter { cell -> cell.domain.count { it } == leastEntropy }
-        return cellsWithLeastEntropy.random()
+        return unsolvedCells.filter { cell -> cell.domain.count { it } == leastEntropy }
     }
 }
 
