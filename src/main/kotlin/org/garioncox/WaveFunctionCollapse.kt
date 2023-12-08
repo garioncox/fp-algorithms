@@ -1,14 +1,12 @@
 package org.garioncox
 
-import java.lang.IllegalStateException
-import kotlin.math.min
-import kotlin.random.Random
+import kotlin.IllegalStateException
 
-class WFC(val constraints: IConstraints) {
-    fun toCells(board: Array<Array<Int>>): Array<Array<Cell>> {
+class WFC(private val neighborhood: INeighborhood) {
+    fun toCells(board: Array<Array<Int?>>): Array<Array<Cell>> {
         val dim = board.size
         val cellsToReturn =
-            Array(board.size) { Array<Cell>(board[0].size) { Cell(BooleanArray(dim) { true }.toTypedArray()) } }
+            Array(board.size) { Array<Cell>(board[0].size) { Cell(setOf()) } }
 
         for (row in 0..<dim) {
             for (col in 0..<dim) {
@@ -16,106 +14,111 @@ class WFC(val constraints: IConstraints) {
                 // Get Neighbors
                 val current = board[row][col]
 
-                val domain: BooleanArray
+                val domain: Set<Int>
                 val isSolved: Boolean
                 // If current is not solved, set domain to all possible values
-                if (current == 0) {
-                    domain = BooleanArray(dim) { true }
+                if (current == null) {
+                    domain = (1.. board.size).toSet()
                     isSolved = false
                 }
                 // If current is solved, set the domain to the solved value
                 else {
-                    domain = BooleanArray(dim) { false }
-                    domain[current - 1] = true
+                    domain = setOf(current)
                     isSolved = true
                 }
 
-                cellsToReturn[row][col] = Cell(domain.toTypedArray(), isSolved)
+                cellsToReturn[row][col] = Cell(domain, isSolved)
             }
         }
 
         // Update the domain of all cells
-        return propagate(cellsToReturn)
+        return propagate(cellsToReturn)!!
     }
 
-    fun propagate(board: Array<Array<Cell>>): Array<Array<Cell>> {
+    fun solve(input: Array<Array<Cell>>, i: Int = 0): Array<Array<Cell>>? {
+        if (isSolved(input)) {
+            return input
+        }
+
+        var board = input.deepCopy()
+
+        val cells = getUnsolvedCells(board)
+        for (cell in cells) {
+            if (cell.isSolved) {
+                continue
+            }
+            val domainSavepoint = cell.domain.toSet()
+
+            // For value in possible values
+            for (value in cell.domain) {
+                val savepoint = board.deepCopy()
+
+                // Set cell to that value and update neighbors
+                cell.solveTo(value)
+                val propagatedBoard = propagate(board)
+
+                // If none of the neighbors are in an invalid state, recur
+                if (propagatedBoard != null) {
+                    val recurredBoard = solve(board, i + 1)
+
+                    // If there is a path in the recursion, return
+                    if (recurredBoard != null) {
+                        return recurredBoard
+                    }
+                    // Otherwise, try the next value
+                }
+                // Otherwise, reset the board
+                board = savepoint
+            }
+
+            // Revert Cell
+            cell.isSolved = false
+            cell.domain = domainSavepoint
+
+            // Revert propagation
+            board = input.copyOf()
+        }
+
+        // If no solutions are found for the possible values of this cell, return null
+        return null
+    }
+
+    fun propagate(board: Array<Array<Cell>>): Array<Array<Cell>>? {
         val dim = board.size
 
         for (row in 0..<dim) {
             for (col in 0..<dim) {
+
+                // If the current cell is solved, don't solve it again
                 val current = board[row][col]
                 if (current.isSolved) {
                     continue
                 }
 
-                val neighbors = constraints.getNeighborsOf(row, col, board)
+                val neighbors = neighborhood.getNeighborsOf(row, col, board)
                 for (n in neighbors) {
+                    // If the neighbor is not solved, doesn't affect the neighbors
                     if (!n.isSolved) {
                         continue
                     }
 
                     // Remove values in domain that appear in solved neighbors
-                    current.domain[n.domain.indexOf(true)] = false
+                    current.domain - n.domain
                 }
 
                 // If the cell has only one value in its domain, set it to solved
-                if (current.domain.count { it } == 1) {
+                if (current.domain.size == 1) {
                     current.isSolved = true
                 }
 
-                // If the cell has no valid domain, throw exception
-                if (current.domain.count { it } == 0) {
-                    throw IllegalStateException()
+                // If the cell has no valid domain, don't return a board
+                if (current.domain.isEmpty()) {
+                    return null
                 }
             }
         }
 
         return board
-    }
-
-    fun guess(board: Array<Array<Cell>>): Array<Array<Cell>> {
-        var boardCopy = board.copyOf()
-
-        val cells = getCellsWithLeastEntropy(boardCopy)
-        if (cells.isNullOrEmpty()) {
-            return boardCopy
-        }
-
-        val randomCell = cells.random()
-        var originalDomain = randomCell.domain.copyOf()
-
-        while (true) {
-            // Make a guess
-            val validRandomCellDomain = randomCell.domain.indices.filter { randomCell.domain[it] }
-            val updatedDomain = BooleanArray(boardCopy.size) { false }
-            val choice = validRandomCellDomain.random()
-            updatedDomain[choice] = true
-
-            // Update cell based on guess
-            randomCell.domain = updatedDomain.toTypedArray()
-            randomCell.isSolved = true
-
-            // Try to propagate the guess
-            try {
-                propagate(boardCopy)
-
-                // Completed successfully
-                break
-            }
-            catch (e: IllegalStateException) {
-                // Remove guess from the original domain
-                originalDomain[choice] = false
-
-                // Undo changes to the board and cell
-                boardCopy = board
-                randomCell.domain = originalDomain
-
-                // Try again
-                continue
-            }
-        }
-
-        return boardCopy
     }
 
     fun isSolved(board: Array<Array<Cell>>): Boolean {
@@ -128,33 +131,38 @@ class WFC(val constraints: IConstraints) {
         return true
     }
 
-    fun getCellsWithLeastEntropy(board: Array<Array<Cell>>): List<Cell>? {
-        val unsolvedCells = board.flatten().filter { cell -> !cell.isSolved }
-        if (unsolvedCells.isEmpty()) {
-            return null
-        }
-
-        val leastEntropy = unsolvedCells.minOf { cell -> cell.domain.count { it } }
-        if (leastEntropy == 1) {
-            throw IllegalStateException()
-        } // Should never be 1. This means all cells are solved
-
-        return unsolvedCells.filter { cell -> cell.domain.count { it } == leastEntropy }
+    fun getUnsolvedCells(board: Array<Array<Cell>>): List<Cell> {
+        return board.flatten().filter { cell -> !cell.isSolved }
     }
 }
 
 
-class Cell(var domain: Array<Boolean>, var isSolved: Boolean = false) {
+class Cell(var domain: Set<Int>, var isSolved: Boolean = false) {
     fun isEqualTo(expected: Cell): Boolean {
-        return expected.domain.contentEquals(this.domain) && expected.isSolved == this.isSolved
+        return expected.domain == this.domain && expected.isSolved == this.isSolved
+    }
+
+    fun solveTo(i: Int) {
+        this.domain = setOf(i)
+        this.isSolved = true
+    }
+
+    fun copy(): Cell {
+        return Cell(this.domain, this.isSolved)
     }
 }
 
-interface IConstraints {
+fun Array<Array<Cell>>.deepCopy(): Array<Array<Cell>> {
+    return this.map { row ->
+        row.map { cell -> cell.copy() }.toTypedArray()
+    }.toTypedArray()
+}
+
+interface INeighborhood {
     fun getNeighborsOf(row: Int, col: Int, board: Array<Array<Cell>>): Collection<Cell>
 }
 
-class SudokuConstraints : IConstraints {
+class SudokuNeighborhood : INeighborhood {
     override fun getNeighborsOf(row: Int, col: Int, board: Array<Array<Cell>>): Collection<Cell> {
         val currentCell = board[row][col]
         val rowCells = board[row].toSet()
