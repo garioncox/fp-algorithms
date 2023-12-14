@@ -1,4 +1,5 @@
 import org.garioncox.CollapseSudokuSolver
+import org.garioncox.SudokuSolver
 
 fun main() {
     val sudokuBoard = arrayOf(
@@ -25,7 +26,7 @@ fun main() {
 //        arrayOf(0, 0, 0, 0, 0, 0, 0, 0, 0)
 //    )
 
-    if (CollapseSudokuSolver.solveSudoku(sudokuBoard)) {
+    if (SudokuSolver.solveSudoku(sudokuBoard)) {
         println("Sudoku Solved:")
 
         for (row in 0..< sudokuBoard.size) {
